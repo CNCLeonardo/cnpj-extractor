@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Extrator de CNPJ</title>
+  <meta name="description" content="Extrai CNPJs de texto e imagens, valida e retorna somente os 14 dígitos." />
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <style>
+    :root { color-scheme: light dark; --bg:#f6f7f9; --card:#fff; --text:#1f2328; --muted:#667085; --border:#d0d5dd; --accent:#0969da; --ok:#157347; --bad:#b42318; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#0d1117; --card:#161b22; --text:#f0f6fc; --muted:#8b949e; --border:#30363d; --accent:#58a6ff; --ok:#3fb950; --bad:#ff7b72; } }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); }
+    main { max-width:900px; margin:0 auto; padding:28px 18px 48px; }
+    h1 { margin:0 0 6px; font-size:30px; }
+    .sub { margin:0 0 24px; color:var(--muted); }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:18px; margin:14px 0; }
+    label { font-weight:650; display:block; margin-bottom:8px; }
+    textarea { width:100%; min-height:150px; resize:vertical; border:1px solid var(--border); border-radius:10px; padding:12px; font:inherit; background:transparent; color:inherit; }
+    .drop { border:2px dashed var(--border); border-radius:12px; padding:28px 16px; text-align:center; cursor:pointer; transition:.15s; }
+    .drop.drag { border-color:var(--accent); }
+    .drop small { color:var(--muted); display:block; margin-top:6px; }
+    input[type=file] { display:none; }
+    button { border:0; border-radius:9px; padding:10px 14px; font:inherit; font-weight:650; cursor:pointer; }
+    .primary { background:var(--accent); color:white; }
+    .secondary { background:transparent; color:var(--text); border:1px solid var(--border); }
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .status { color:var(--muted); margin-top:10px; min-height:24px; }
+    progress { width:100%; height:12px; margin-top:8px; display:none; }
+    .result { display:flex; justify-content:space-between; gap:12px; align-items:center; border:1px solid var(--border); border-radius:10px; padding:12px; margin-top:10px; }
+    .number { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:21px; letter-spacing:.4px; word-break:break-all; }
+    .valid { color:var(--ok); font-size:13px; }
+    .invalid { color:var(--bad); font-size:13px; }
+    .empty { color:var(--muted); }
+    .privacy { font-size:13px; color:var(--muted); }
+    .preview { max-width:100%; max-height:260px; display:none; margin-top:12px; border-radius:8px; border:1px solid var(--border); }
+    .copied { color:var(--ok); font-weight:650; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Extrator de CNPJ</h1>
+  <p class="sub">Cole um texto ou uma imagem. O resultado sai sem pontuação, pronto para copiar e pesquisar no Protheus.</p>
+
+  <section class="card">
+    <label for="textInput">1. Texto</label>
+    <textarea id="textInput" placeholder="Ex.: Cliente XYZ — CNPJ: 29.435.005/0099-32"></textarea>
+    <div class="row" style="margin-top:10px">
+      <button class="primary" id="extractText">Extrair do texto</button>
+      <button class="secondary" id="clearText">Limpar</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <label>2. Imagem</label>
+    <div class="drop" id="dropZone" tabindex="0" role="button" aria-label="Selecionar imagem">
+      Arraste uma imagem aqui, cole com Ctrl+V, ou clique para selecionar
+      <small>Tire um print e pressione Ctrl+V em qualquer lugar desta página</small>
+    </div>
+    <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp" />
+    <img id="preview" class="preview" alt="Prévia da imagem selecionada" />
+    <progress id="progress" max="1" value="0"></progress>
+    <div class="status" id="ocrStatus"></div>
+  </section>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <label style="margin:0">CNPJs encontrados</label>
+      <button class="secondary" id="copyAll" style="display:none">Copiar todos</button>
+    </div>
+    <div id="results" class="empty">Nenhum CNPJ extraído ainda.</div>
+    <div id="copyStatus" class="status"></div>
+  </section>
+
+  <p class="privacy">Privacidade: o texto e a imagem são processados no seu navegador. A aplicação não envia o conteúdo para um servidor próprio. A biblioteca de OCR é carregada pela internet.</p>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const resultsEl = $('results');
+const copyAllBtn = $('copyAll');
+let current = [];
+let previewUrl = null;
+
+function validateCNPJ(cnpj) {
+  if (!/^\d{14}$/.test(cnpj) || /^(\d)\1{13}$/.test(cnpj)) return false;
+  const calc = (base, weights) => {
+    const sum = base.split('').reduce((acc,n,i) => acc + Number(n)*weights[i], 0);
+    const r = sum % 11;
+    return r < 2 ? 0 : 11-r;
+  };
+  const d1 = calc(cnpj.slice(0,12), [5,4,3,2,9,8,7,6,5,4,3,2]);
+  const d2 = calc(cnpj.slice(0,12)+d1, [6,5,4,3,2,9,8,7,6,5,4,3,2]);
+  return Number(cnpj[12]) === d1 && Number(cnpj[13]) === d2;
+}
+
+function normalizeOCRChunk(s) {
+  return s.replace(/[OoQq]/g,'0').replace(/[Il|]/g,'1').replace(/[Ss]/g,'5').replace(/[Bb]/g,'8');
+}
+
+function extractCandidates(text) {
+  const found = new Set();
+  const source = String(text || '').replace(/\u00a0/g,' ');
+  const formatted = /(?:\bCNPJ\b\s*[:\-]?\s*)?([0-9OoQqIl|SsBb]{2}\s*[.\-]?\s*[0-9OoQqIl|SsBb]{3}\s*[.\-]?\s*[0-9OoQqIl|SsBb]{3}\s*[\/\\\-]?\s*[0-9OoQqIl|SsBb]{4}\s*[-.]?\s*[0-9OoQqIl|SsBb]{2})/gi;
+  for (const m of source.matchAll(formatted)) {
+    const digits = normalizeOCRChunk(m[1]).replace(/\D/g,'');
+    if (digits.length === 14) found.add(digits);
+  }
+  const plain = /(?<!\d)(\d{14})(?!\d)/g;
+  for (const m of source.matchAll(plain)) found.add(m[1]);
+  return [...found].sort((a,b) => Number(validateCNPJ(b))-Number(validateCNPJ(a)));
+}
+
+function render(candidates) {
+  current = candidates;
+  resultsEl.innerHTML='';
+  $('copyStatus').textContent='';
+  if (!candidates.length) {
+    resultsEl.className='empty';
+    resultsEl.textContent='Nenhum CNPJ encontrado.';
+    copyAllBtn.style.display='none';
+    return;
+  }
+  resultsEl.className='';
+  copyAllBtn.style.display = candidates.length > 1 ? 'inline-block' : 'none';
+  candidates.forEach(cnpj => {
+    const valid = validateCNPJ(cnpj);
+    const box = document.createElement('div'); box.className='result';
+    const left = document.createElement('div');
+    left.innerHTML = `<div class="number">${cnpj}</div><div class="${valid?'valid':'invalid'}">${valid?'CNPJ válido':'Atenção: dígitos verificadores não conferem'}</div>`;
+    const btn = document.createElement('button'); btn.className='primary'; btn.textContent='Copiar';
+    btn.onclick = async () => { await navigator.clipboard.writeText(cnpj); btn.textContent='Copiado ✓'; $('copyStatus').textContent='CNPJ copiado para a área de transferência.'; $('copyStatus').className='status copied'; setTimeout(()=>btn.textContent='Copiar',1200); };
+    box.append(left,btn); resultsEl.appendChild(box);
+  });
+}
+
+async function tryAutoCopy(candidates) {
+  const status = $('copyStatus');
+  if (candidates.length !== 1 || !validateCNPJ(candidates[0])) {
+    if (candidates.length > 1) status.textContent='Mais de um CNPJ encontrado; escolha o correto e clique em Copiar.';
+    return false;
+  }
+  try {
+    await navigator.clipboard.writeText(candidates[0]);
+    status.textContent='✓ CNPJ copiado automaticamente para a área de transferência.';
+    status.className='status copied';
+    return true;
+  } catch (err) {
+    console.warn('Cópia automática bloqueada pelo navegador:', err);
+    status.textContent='CNPJ encontrado. Se a cópia automática for bloqueada pelo navegador, use o botão Copiar.';
+    status.className='status';
+    return false;
+  }
+}
+
+function clearAll() {
+  $('textInput').value='';
+  $('imageInput').value='';
+  const preview = $('preview');
+  if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
+  preview.removeAttribute('src');
+  preview.style.display='none';
+  $('ocrStatus').textContent='';
+  $('copyStatus').textContent='';
+  $('copyStatus').className='status';
+  const progress = $('progress'); progress.value=0; progress.style.display='none';
+  render([]);
+}
+
+$('extractText').onclick = async () => {
+  const candidates = extractCandidates($('textInput').value);
+  render(candidates);
+  await tryAutoCopy(candidates);
+};
+$('clearText').onclick = clearAll;
+copyAllBtn.onclick = async () => navigator.clipboard.writeText(current.join('\n'));
+
+const drop = $('dropZone');
+const input = $('imageInput');
+drop.onclick = () => input.click();
+drop.onkeydown = e => { if (e.key==='Enter' || e.key===' ') input.click(); };
+input.onchange = () => { if (input.files[0]) processImage(input.files[0]); };
+['dragenter','dragover'].forEach(evt => drop.addEventListener(evt,e => { e.preventDefault(); drop.classList.add('drag'); }));
+['dragleave','drop'].forEach(evt => drop.addEventListener(evt,e => { e.preventDefault(); drop.classList.remove('drag'); }));
+drop.addEventListener('drop',e => { const f=e.dataTransfer.files[0]; if (f) processImage(f); });
+window.addEventListener('paste',e => {
+  const item=[...(e.clipboardData?.items||[])].find(i => i.type.startsWith('image/'));
+  if (item) { const f=item.getAsFile(); if (f) processImage(f); }
+});
+
+async function processImage(file) {
+  if (!file.type.startsWith('image/')) return;
+  const preview=$('preview');
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl=URL.createObjectURL(file);
+  preview.src=previewUrl; preview.style.display='block';
+  const status=$('ocrStatus'), progress=$('progress');
+  progress.style.display='block'; progress.value=0; status.textContent='Preparando OCR…';
+  try {
+    const {data}=await Tesseract.recognize(file,'por',{logger:m=>{
+      if (typeof m.progress==='number') progress.value=m.progress;
+      if (m.status) status.textContent=`OCR: ${m.status}${typeof m.progress==='number' ? ` — ${Math.round(m.progress*100)}%` : ''}`;
+    }});
+    $('textInput').value=data.text;
+    const candidates=extractCandidates(data.text);
+    render(candidates);
+    const copied = await tryAutoCopy(candidates);
+    status.textContent=candidates.length ? `Concluído: ${candidates.length} CNPJ(s) candidato(s) encontrado(s)${copied ? ' e copiado automaticamente.' : '.'}` : 'Concluído, mas nenhum CNPJ foi identificado. Confira o texto reconhecido acima.';
+  } catch(err) {
+    console.error(err);
+    status.textContent='Não foi possível ler a imagem. Tente uma captura mais nítida ou cole o CNPJ como texto.';
+  } finally { progress.style.display='none'; }
+}
+</script>
+</body>
+</html>
