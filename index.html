@@ -236,7 +236,11 @@ async function pasteFromClipboard() {
     if (!text) { toast('A área de transferência está vazia.'); return; }
     $('textInput').value=text;
     $('textInput').focus();
-    toast('Texto colado. Clique em Extrair do texto.');
+    const candidates=extractCandidates(text);
+    render(candidates);
+    const copied=await tryAutoCopy(candidates);
+    if (candidates.length) scheduleAutoClear();
+    toast(!candidates.length?'Texto colado, mas nenhum CNPJ foi encontrado.':copied?'CNPJ colado, extraído e copiado.':'Texto colado e CNPJ extraído.');
   } catch (err) {
     console.warn('Não foi possível acessar a área de transferência:',err);
     toast('O navegador bloqueou a colagem. Use Ctrl+V.');
