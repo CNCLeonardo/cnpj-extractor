@@ -7,27 +7,36 @@
   <meta name="description" content="Extrai CNPJs de texto e imagens, valida e retorna somente os 14 dígitos." />
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
-    :root { color-scheme: light dark; --bg:#f6f7f9; --card:#fff; --text:#1f2328; --muted:#667085; --border:#d0d5dd; --accent:#0969da; --ok:#157347; --bad:#b42318; }
-    @media (prefers-color-scheme: dark) { :root { --bg:#0d1117; --card:#161b22; --text:#f0f6fc; --muted:#8b949e; --border:#30363d; --accent:#58a6ff; --ok:#3fb950; --bad:#ff7b72; } }
+    :root { --bg:#f3f6f8; --card:#fff; --text:#142235; --muted:#607086; --border:#dce4ec; --navy:#173a5e; --accent:#087d79; --accent-soft:#e7f5f3; --ok:#08726d; --bad:#a43b3b; --shadow:0 16px 42px rgba(23,58,94,.10); }
     * { box-sizing:border-box; }
-    body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); }
-    main { max-width:900px; margin:0 auto; padding:28px 18px 48px; }
-    h1 { margin:0 0 6px; font-size:30px; }
-    .sub { margin:0 0 24px; color:var(--muted); }
-    .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:18px; margin:14px 0; }
-    label { font-weight:650; display:block; margin-bottom:8px; }
-    textarea { width:100%; min-height:150px; resize:vertical; border:1px solid var(--border); border-radius:10px; padding:12px; font:inherit; background:transparent; color:inherit; }
-    .drop { border:2px dashed var(--border); border-radius:12px; padding:28px 16px; text-align:center; cursor:pointer; transition:.15s; }
-    .drop.drag { border-color:var(--accent); }
+    body { margin:0; min-height:100vh; font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); }
+    .top { height:6px; background:linear-gradient(90deg,var(--navy) 0 58%,var(--accent) 58%); }
+    header { background:var(--card); border-bottom:1px solid var(--border); }
+    .head { max-width:1000px; margin:auto; padding:22px 24px; display:flex; align-items:center; gap:14px; }
+    .mark { width:44px; height:44px; border-radius:12px; background:var(--navy); display:grid; place-items:center; color:#fff; flex:none; }
+    .mark svg { width:24px; }
+    h1 { margin:0; font-size:1.25rem; letter-spacing:-.02em; }
+    .head p { margin:3px 0 0; color:var(--muted); font-size:.9rem; }
+    main { max-width:1000px; margin:28px auto 60px; padding:0 24px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:20px; margin:14px 0; box-shadow:var(--shadow); }
+    label { font-size:.82rem; font-weight:750; display:block; margin-bottom:9px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+    textarea { width:100%; min-height:145px; resize:vertical; border:1px solid var(--border); border-radius:11px; padding:13px; font:inherit; background:#fafcfd; color:inherit; transition:.15s; }
+    textarea:focus { outline:2px solid #b8dcda; border-color:var(--accent); }
+    .drop { border:2px dashed #abc0d2; border-radius:14px; padding:31px 16px; text-align:center; cursor:pointer; background:#f8fafc; transition:.15s; }
+    .drop:hover,.drop.drag { border-color:var(--accent); background:var(--accent-soft); }
     .drop small { color:var(--muted); display:block; margin-top:6px; }
     input[type=file] { display:none; }
-    button { border:0; border-radius:9px; padding:10px 14px; font:inherit; font-weight:650; cursor:pointer; }
+    button { border:0; border-radius:10px; padding:10px 14px; font:inherit; font-weight:700; cursor:pointer; transition:.15s; }
     .primary { background:var(--accent); color:white; }
-    .secondary { background:transparent; color:var(--text); border:1px solid var(--border); }
+    .primary:hover { background:#066d69; }
+    .secondary { background:#fff; color:var(--navy); border:1px solid var(--border); }
+    .secondary:hover { background:#f7f9fb; }
+    .paste { border-color:#b9d9d6; color:var(--accent); }
     .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
     .status { color:var(--muted); margin-top:10px; min-height:24px; }
+    .auto-clear { color:var(--muted); font-size:.76rem; margin:10px 0 0; }
     progress { width:100%; height:12px; margin-top:8px; display:none; }
-    .result { display:flex; justify-content:space-between; gap:12px; align-items:center; border:1px solid var(--border); border-radius:10px; padding:12px; margin-top:10px; }
+    .result { display:flex; justify-content:space-between; gap:12px; align-items:center; border:1px solid #dce8e7; border-radius:11px; padding:13px; margin-top:10px; background:#f8fbfb; }
     .number { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:21px; letter-spacing:.4px; word-break:break-all; }
     .valid { color:var(--ok); font-size:13px; }
     .invalid { color:var(--bad); font-size:13px; }
@@ -35,20 +44,26 @@
     .privacy { font-size:13px; color:var(--muted); }
     .preview { max-width:100%; max-height:260px; display:none; margin-top:12px; border-radius:8px; border:1px solid var(--border); }
     .copied { color:var(--ok); font-weight:650; }
+    .privacy { display:flex; align-items:flex-start; gap:8px; line-height:1.45; }
+    .privacy svg { width:15px; flex:none; margin-top:1px; }
+    .toast { position:fixed; right:24px; bottom:24px; background:var(--text); color:#fff; padding:11px 15px; border-radius:10px; font-size:.84rem; box-shadow:var(--shadow); opacity:0; transform:translateY(8px); pointer-events:none; transition:.2s; }
+    .toast.show { opacity:1; transform:none; }
+    @media(max-width:600px){main{padding:0 12px;margin-top:16px}.head{padding:17px 15px}.head p{display:none}.card{padding:15px}.row button{flex:1}.result{align-items:flex-start;flex-direction:column}.result button{width:100%}.toast{left:12px;right:12px;text-align:center}}
   </style>
 </head>
 <body>
+<div class="top"></div>
+<header><div class="head"><div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg></div><div><h1>Extrator de CNPJ</h1><p>Extração local para pesquisa rápida no Protheus</p></div></div></header>
 <main>
-  <h1>Extrator de CNPJ</h1>
-  <p class="sub">Cole um texto ou uma imagem. O resultado sai sem pontuação, pronto para copiar e pesquisar no Protheus.</p>
-
   <section class="card">
     <label for="textInput">1. Texto</label>
     <textarea id="textInput" placeholder="Ex.: Cliente XYZ — CNPJ: 29.435.005/0099-32"></textarea>
     <div class="row" style="margin-top:10px">
+      <button class="secondary paste" id="pasteButton">Colar</button>
       <button class="primary" id="extractText">Extrair do texto</button>
       <button class="secondary" id="clearText">Limpar</button>
     </div>
+    <p class="auto-clear" id="autoClearStatus">A tela será limpa automaticamente 3 minutos após uma extração.</p>
   </section>
 
   <section class="card">
@@ -72,14 +87,38 @@
     <div id="copyStatus" class="status"></div>
   </section>
 
-  <p class="privacy">Privacidade: o texto e a imagem são processados no seu navegador. A aplicação não envia o conteúdo para um servidor próprio. A biblioteca de OCR é carregada pela internet.</p>
+  <p class="privacy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><span>O texto e a imagem são processados no seu navegador. A aplicação não envia o conteúdo para um servidor próprio; somente a biblioteca de OCR é carregada pela internet.</span></p>
 </main>
+<div class="toast" id="toast"></div>
 <script>
 const $ = id => document.getElementById(id);
 const resultsEl = $('results');
 const copyAllBtn = $('copyAll');
 let current = [];
 let previewUrl = null;
+let autoClearTimer = null;
+let autoClearDeadline = 0;
+const AUTO_CLEAR_MS = 3 * 60 * 1000;
+const AUTO_CLEAR_KEY = 'cnpjAutoClearDeadline';
+
+function toast(message) {
+  const el=$('toast'); el.textContent=message; el.classList.add('show');
+  clearTimeout(el._timer); el._timer=setTimeout(()=>el.classList.remove('show'),2600);
+}
+
+function cancelAutoClear() {
+  clearTimeout(autoClearTimer); autoClearTimer=null; autoClearDeadline=0;
+  sessionStorage.removeItem(AUTO_CLEAR_KEY);
+}
+
+function scheduleAutoClear(delay=AUTO_CLEAR_MS) {
+  clearTimeout(autoClearTimer);
+  autoClearDeadline=Date.now()+delay;
+  sessionStorage.setItem(AUTO_CLEAR_KEY,String(autoClearDeadline));
+  autoClearTimer=setTimeout(()=>clearAll('auto'),delay);
+  const minutes=Math.max(1,Math.ceil(delay/60000));
+  $('autoClearStatus').textContent=`Limpeza automática programada para daqui a ${minutes} minuto${minutes===1?'':'s'}.`;
+}
 
 function validateCNPJ(cnpj) {
   if (!/^\d{14}$/.test(cnpj) || /^(\d)\1{13}$/.test(cnpj)) return false;
@@ -128,7 +167,7 @@ function render(candidates) {
     const left = document.createElement('div');
     left.innerHTML = `<div class="number">${cnpj}</div><div class="${valid?'valid':'invalid'}">${valid?'CNPJ válido':'Atenção: dígitos verificadores não conferem'}</div>`;
     const btn = document.createElement('button'); btn.className='primary'; btn.textContent='Copiar';
-    btn.onclick = async () => { await navigator.clipboard.writeText(cnpj); btn.textContent='Copiado ✓'; $('copyStatus').textContent='CNPJ copiado para a área de transferência.'; $('copyStatus').className='status copied'; setTimeout(()=>btn.textContent='Copiar',1200); };
+    btn.onclick = async () => { await navigator.clipboard.writeText(cnpj); btn.textContent='Copiado ✓'; $('copyStatus').textContent='CNPJ copiado para a área de transferência.'; $('copyStatus').className='status copied'; scheduleAutoClear(); setTimeout(()=>btn.textContent='Copiar',1200); };
     box.append(left,btn); resultsEl.appendChild(box);
   });
 }
@@ -152,7 +191,8 @@ async function tryAutoCopy(candidates) {
   }
 }
 
-function clearAll() {
+function clearAll(reason='manual') {
+  cancelAutoClear();
   $('textInput').value='';
   $('imageInput').value='';
   const preview = $('preview');
@@ -164,15 +204,44 @@ function clearAll() {
   $('copyStatus').className='status';
   const progress = $('progress'); progress.value=0; progress.style.display='none';
   render([]);
+  $('autoClearStatus').textContent='A tela será limpa automaticamente 3 minutos após uma extração.';
+  if (reason==='auto') toast('Tela limpa. Pronta para um novo ciclo.');
 }
 
 $('extractText').onclick = async () => {
   const candidates = extractCandidates($('textInput').value);
   render(candidates);
   await tryAutoCopy(candidates);
+  if (candidates.length) scheduleAutoClear();
 };
+$('pasteButton').onclick = pasteFromClipboard;
 $('clearText').onclick = clearAll;
-copyAllBtn.onclick = async () => navigator.clipboard.writeText(current.join('\n'));
+copyAllBtn.onclick = async () => { await navigator.clipboard.writeText(current.join('\n')); scheduleAutoClear(); toast('CNPJs copiados.'); };
+
+async function pasteFromClipboard() {
+  try {
+    if (navigator.clipboard.read) {
+      const items=await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType=item.types.find(type=>type.startsWith('image/'));
+        if (imageType) {
+          const blob=await item.getType(imageType);
+          await processImage(new File([blob],'imagem-colada.png',{type:imageType}));
+          toast('Imagem colada e enviada para leitura.');
+          return;
+        }
+      }
+    }
+    const text=await navigator.clipboard.readText();
+    if (!text) { toast('A área de transferência está vazia.'); return; }
+    $('textInput').value=text;
+    $('textInput').focus();
+    toast('Texto colado. Clique em Extrair do texto.');
+  } catch (err) {
+    console.warn('Não foi possível acessar a área de transferência:',err);
+    toast('O navegador bloqueou a colagem. Use Ctrl+V.');
+  }
+}
 
 const drop = $('dropZone');
 const input = $('imageInput');
@@ -204,12 +273,20 @@ async function processImage(file) {
     const candidates=extractCandidates(data.text);
     render(candidates);
     const copied = await tryAutoCopy(candidates);
+    if (candidates.length) scheduleAutoClear();
     status.textContent=candidates.length ? `Concluído: ${candidates.length} CNPJ(s) candidato(s) encontrado(s)${copied ? ' e copiado automaticamente.' : '.'}` : 'Concluído, mas nenhum CNPJ foi identificado. Confira o texto reconhecido acima.';
   } catch(err) {
     console.error(err);
     status.textContent='Não foi possível ler a imagem. Tente uma captura mais nítida ou cole o CNPJ como texto.';
   } finally { progress.style.display='none'; }
 }
+
+document.addEventListener('visibilitychange',()=>{
+  if (document.visibilityState!=='visible') return;
+  const deadline=Number(sessionStorage.getItem(AUTO_CLEAR_KEY)||0);
+  if (!deadline) return;
+  if (Date.now()>=deadline) clearAll('auto'); else scheduleAutoClear(deadline-Date.now());
+});
 </script>
 </body>
 </html>
