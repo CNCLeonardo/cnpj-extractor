@@ -48,6 +48,35 @@
     .privacy svg { width:15px; flex:none; margin-top:1px; }
     .toast { position:fixed; right:24px; bottom:24px; background:var(--text); color:#fff; padding:11px 15px; border-radius:10px; font-size:.84rem; box-shadow:var(--shadow); opacity:0; transform:translateY(8px); pointer-events:none; transition:.2s; }
     .toast.show { opacity:1; transform:none; }
+    /* Chrome split view: keep paste, OCR and the copied number visible together. */
+    @media (max-height:520px) and (min-width:900px) {
+      body { min-height:0; }
+      .top { height:3px; }
+      .head { max-width:none; padding:5px 16px; gap:8px; }
+      .mark { width:28px; height:28px; border-radius:8px; }
+      .mark svg { width:17px; }
+      h1 { font-size:1rem; }
+      .head p { display:none; }
+      main { max-width:none; margin:7px auto; padding:0 10px; display:grid; grid-template-columns:minmax(300px,1.25fr) minmax(190px,.75fr) minmax(290px,1fr); gap:8px; align-items:start; }
+      .card { min-width:0; margin:0; padding:9px 11px; border-radius:11px; box-shadow:none; }
+      label { font-size:.7rem; margin-bottom:5px; }
+      textarea { height:clamp(48px,22vh,82px); min-height:0; padding:7px 9px; font-size:.86rem; }
+      .row { gap:6px; }
+      .row[style*="margin-top"] { margin-top:6px !important; }
+      button { padding:6px 10px; font-size:.8rem; border-radius:7px; }
+      .auto-clear { margin:5px 0 0; font-size:.67rem; }
+      .drop { padding:9px 7px; border-radius:8px; font-size:.78rem; }
+      .drop small { margin-top:3px; font-size:.68rem; }
+      .preview { max-height:50px; margin-top:5px; }
+      .status { min-height:0; margin-top:5px; font-size:.75rem; }
+      progress { height:7px; margin-top:5px; }
+      #results { max-height:clamp(75px,31vh,150px); overflow-y:auto; }
+      .result { margin-top:5px; padding:6px 8px; gap:6px; }
+      .number { font-size:1.02rem; }
+      .valid,.invalid { font-size:.7rem; }
+      .privacy { display:none; }
+      .toast { bottom:8px; right:10px; }
+    }
     @media(max-width:600px){main{padding:0 12px;margin-top:16px}.head{padding:17px 15px}.head p{display:none}.card{padding:15px}.row button{flex:1}.result{align-items:flex-start;flex-direction:column}.result button{width:100%}.toast{left:12px;right:12px;text-align:center}}
   </style>
 </head>
